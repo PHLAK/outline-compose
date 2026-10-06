@@ -1,0 +1,66 @@
+services:
+
+  outline:
+    image: docker.getoutline.com/outlinewiki/outline:${OUTLINE_VERSION:-latest}
+    env_file: environment.d/outline.env
+    environment:
+      DATABASE_URL: ${DATABASE_ENGINE:-postgres}://${DATABASE_USER:-outline}:${DATABASE_PASSWORD}@${DATABASE_HOST:-database}:${DATABASE_PORT:-5432}/${DATABASE_NAME:-outline}
+      PGSSLMODE: ${PGSSLMODE:-disable}
+      REDIS_URL: redis://${CACHE_HOST:-cache}:${CACHE_PORT:-6379}
+      SECRET_KEY: ${OUTLINE_SECRET_KEY}
+      UTILS_SECRET: ${OUTLINE_UTILS_SECRET}
+      URL: ${OUTLINE_URL}
+    ports:
+      - ${OUTLINE_PORT:-3000}:3000
+    volumes:
+      - ${OUTLINE_VOLUME:-outline-data}:/var/lib/outline/data
+      - /etc/localtime:/etc/localtime:ro
+    labels:
+      com.centurylinklabs.watchtower.scope: ${COMPOSE_PROJECT_NAME}
+    depends_on: [database, cache]
+    user: ${HOST_USER:-1001}:${HOST_GROUP:-1001}
+    restart: unless-stopped
+
+  database:
+    image: postgres:${POSTGRES_VERSION:-18}
+    env_file: environment.d/postgres.env
+    environment:
+      POSTGRES_DB: ${DATABASE_NAME:-outline}
+      POSTGRES_USER: ${DATABASE_USER:-outline}
+      POSTGRES_PASSWORD: ${DATABASE_PASSWORD}
+    volumes:
+      - ${DATABASE_VOLUME:-postgres-data}:/var/lib/postgresql
+      - /etc/localtime:/etc/localtime:ro
+    healthcheck:
+      test: ['CMD', 'pg_isready', '-d', '${DATABASE_NAME:-outline}', '-U', '${DATABASE_USER:-outline}']
+    labels:
+      com.centurylinklabs.watchtower.scope: ${COMPOSE_PROJECT_NAME}
+    restart: unless-stopped
+
+  cache:
+    image: valkey/valkey:${VALKEY_VERSION:-9}
+    volumes:
+      - ${CACHE_VOLUME:-valkey-data}:/data
+      - /etc/localtime:/etc/localtime:ro
+    labels:
+      com.centurylinklabs.watchtower.scope: ${COMPOSE_PROJECT_NAME}
+    healthcheck:
+      test: ['CMD', 'valkey-cli', 'ping']
+    restart: unless-stopped
+
+  watchtower:
+    image: nickfedor/watchtower:${WATCHTOWER_VERSION:-latest}
+    env_file: environment.d/watchtower.env
+    environment:
+      WATCHTOWER_SCOPE: ${COMPOSE_PROJECT_NAME}
+    volumes:
+      - ${DOCKER_SOCKET:-/var/run/docker.sock}:/var/run/docker.sock
+      - /etc/localtime:/etc/localtime:ro
+    labels:
+      com.centurylinklabs.watchtower.scope: ${COMPOSE_PROJECT_NAME}
+    restart: unless-stopped
+
+volumes:
+  outline-data: {}
+  postgres-data: {}
+  valkey-data: {}
